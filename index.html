@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Breathing Visualization (Tap to Switch Camera)</title>
+  <title>Breathing Visualization with Camera Switch</title>
   <style>
     html, body {
       margin: 0;
@@ -10,16 +10,13 @@
       height: 100%;
       background: #000;
       overflow: hidden;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
     }
     #container {
       position: relative;
       width: 100vw;
       height: 100vh;
-      cursor: pointer;
     }
-    /* Live video layer: full opacity with z-index 1 */
+    /* Live video layer on a lower z-index */
     #video {
       position: absolute;
       top: 0;
@@ -30,7 +27,7 @@
       opacity: 1;
       z-index: 1;
     }
-    /* Inverted delayed layer: 50% opacity with z-index 2 */
+    /* The delayed inverted canvas is above the video */
     #invertedCanvas {
       position: absolute;
       top: 0;
@@ -41,56 +38,66 @@
       opacity: 0.5;
       z-index: 2;
     }
-    /* Offscreen canvas remains hidden */
+    /* Offscreen canvas stays hidden */
     #hiddenCanvas {
       display: none;
     }
-    /* Optional: a small overlay message (fades out) */
-    #tapMessage {
+    /* Controls get a high z-index and a subtle background */
+    #controls {
       position: absolute;
-      top: 10px;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 10;
-      font-size: 18px;
-      color: #fff;
-      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.5);
       padding: 5px 10px;
       border-radius: 5px;
-      opacity: 0.8;
+    }
+    #controls button {
+      padding: 10px 15px;
+      font-size: 16px;
+      color: #fff;
+      background: rgba(50, 50, 50, 0.8);
+      border: none;
+      border-radius: 5px;
     }
   </style>
 </head>
 <body>
   <div id="container">
+    <!-- Bottom layer: live camera feed -->
     <video id="video" autoplay playsinline muted></video>
+    <!-- Top layer: delayed & inverted frame -->
     <canvas id="invertedCanvas"></canvas>
-    <canvas id="hiddenCanvas"></canvas>
-    <!-- Optional message that briefly shows instructions -->
-    <div id="tapMessage">Tap anywhere to switch camera</div>
+    <!-- UI control container -->
+    <div id="controls">
+      <button id="switchCamera">Switch Camera</button>
+    </div>
   </div>
+  <!-- Offscreen canvas for capturing video frames -->
+  <canvas id="hiddenCanvas"></canvas>
 
   <script>
-    const container = document.getElementById('container');
+    // References to elements
     const video = document.getElementById('video');
     const invertedCanvas = document.getElementById('invertedCanvas');
     const invertedCtx = invertedCanvas.getContext('2d');
     const hiddenCanvas = document.getElementById('hiddenCanvas');
     const hiddenCtx = hiddenCanvas.getContext('2d');
-    const tapMessage = document.getElementById('tapMessage');
+    const switchCameraBtn = document.getElementById('switchCamera');
 
-    // Set delay to 600ms for the composite effect.
+    // 600ms delay for composite effect
     const delayInMs = 600;
     let videoWidth, videoHeight;
     const frameBuffer = [];
     
-    // Track current camera mode; start with back ("environment")
+    // Track current camera mode; default is back ("environment")
     let currentFacingMode = 'environment';
     let stream = null;
     
-    // Start or restart the camera stream with the desired facing mode.
+    // Start the camera with the selected facing mode
     async function startCamera() {
-      // Stop any existing streams.
+      // Stop any existing stream
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -106,8 +113,7 @@
           invertedCanvas.height = videoHeight;
           hiddenCanvas.width = videoWidth;
           hiddenCanvas.height = videoHeight;
-          // Clear any leftover frames from earlier streams.
-          frameBuffer.length = 0;
+          frameBuffer.length = 0; // Clear frame buffer
           requestAnimationFrame(processFrame);
         };
       } catch (err) {
@@ -115,43 +121,35 @@
       }
     }
     
-    // Process video frames to implement the delayed, inverted overlay.
+    // Process video frames for the delayed, inverted overlay
     function processFrame() {
-      // Draw the current frame into the offscreen hidden canvas.
       hiddenCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
-      // Retrieve image data and timestamp the frame.
       const frame = hiddenCtx.getImageData(0, 0, videoWidth, videoHeight);
       frame.timestamp = performance.now();
       frameBuffer.push(frame);
       
       const now = performance.now();
-      // When a buffered frame is older than the desired delay...
       if (frameBuffer.length && now - frameBuffer[0].timestamp >= delayInMs) {
         const delayedFrame = frameBuffer.shift();
-        // Invert the pixel colors.
         for (let i = 0; i < delayedFrame.data.length; i += 4) {
           delayedFrame.data[i]     = 255 - delayedFrame.data[i];     // Red
           delayedFrame.data[i + 1] = 255 - delayedFrame.data[i + 1]; // Green
           delayedFrame.data[i + 2] = 255 - delayedFrame.data[i + 2]; // Blue
-          // Alpha remains unchanged.
         }
         invertedCtx.putImageData(delayedFrame, 0, 0);
       } else {
         invertedCtx.clearRect(0, 0, videoWidth, videoHeight);
       }
-      
       requestAnimationFrame(processFrame);
     }
     
-    // Toggle camera between front and back when the container is tapped.
-    container.addEventListener('click', () => {
+    // Toggle between front and back cameras when the button is clicked
+    switchCameraBtn.addEventListener('click', () => {
       currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
       startCamera();
-      // Optionally hide the tap instruction after first tap.
-      tapMessage.style.opacity = 0;
     });
     
-    // Start the camera on page load.
+    // Initialize the camera on startup
     startCamera();
   </script>
 </body>
